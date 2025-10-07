@@ -2,7 +2,7 @@ name: Daily Index Report
 
 on:
   schedule:
-    # Run every weekday at 08:00 Vilnius time (05:00 UTC)
+    # 08:00 Vilnius time ≈ 05:00 UTC
     - cron: '0 5 * * 1-5'
   workflow_dispatch:
 
@@ -22,26 +22,24 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yfinance
+          pip install -r requirements.txt
 
       - name: Run tracker
+        id: run_script
         run: |
-          python tracker.py
+          python tracker.py > output.txt
+          echo "OUTPUT<<EOF" >> $GITHUB_ENV
+          cat output.txt >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
-      - name: Prepare email subject
-        id: subject
-        run: |
-          echo "SUBJECT=Daily Index Update — $(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
-      - name: Send email with HTML report
+      - name: Send email with report
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 587
           username: ${{ secrets.EMAIL_USER }}
           password: ${{ secrets.EMAIL_PASS }}
-          subject: ${{ env.SUBJECT }}
+          subject: "Daily Index Update — $(date '+%Y-%m-%d')"
           to: ${{ secrets.EMAIL_TO }}
           from: "Index Tracker"
-          content_type: text/html
-          body: file://report.html
+          body: ${{ env.OUTPUT }}

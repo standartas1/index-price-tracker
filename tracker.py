@@ -2,7 +2,7 @@ import yfinance as yf
 import time
 import json
 import warnings
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
@@ -11,7 +11,7 @@ TZ = ZoneInfo("Europe/Vilnius")
 CACHE_FILE = Path("ath_cache.json")
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# ANSI colors (for local console only)
+# ANSI colors
 RED   = "\033[91m"
 GRAY  = "\033[90m"
 GREEN = "\033[92m"
@@ -37,6 +37,7 @@ def get_cached_ath(ticker, cache):
     """Return cached ATH if fresh (<7 days), else refresh from Yahoo Finance."""
     now = datetime.now(TZ)
     entry = cache.get(ticker)
+
     if entry:
         try:
             last_update = datetime.fromisoformat(entry["updated"])
@@ -52,7 +53,6 @@ def get_cached_ath(ticker, cache):
 
     if hist_all.empty and intraday_high is None:
         raise RuntimeError(f"Could not refresh ATH for {ticker}")
-
     ath = float(max(hist_all.max() if not hist_all.empty else 0,
                     intraday_high if intraday_high else 0))
 
@@ -105,7 +105,7 @@ def get_ytd_change(ticker):
 
 # ---------- Formatting ----------
 def colorize_change(value):
-    """Return colored string for console output."""
+    """Return colored string for % change."""
     if value is None:
         return "N/A"
     if abs(value) < 0.005:
@@ -116,44 +116,6 @@ def colorize_change(value):
         color = RED
     sign = "+" if value >= 0 else ""
     return f"{color}{sign}{value:.2f}%{RESET}"
-
-def generate_html_report(rows, now_lt):
-    """Return an HTML formatted version of the report."""
-    html = [
-        f"<h2 style='font-family:sans-serif;'>Daily Index Update — {now_lt}</h2>",
-        "<div style='font-family:monospace; white-space:pre;'>"
-    ]
-
-    def html_color(value):
-        if value is None:
-            return "N/A"
-        sign = "+" if value >= 0 else ""
-        if abs(value) < 0.005:
-            color = "#888"
-        elif value > 0:
-            color = "#0b0"
-        else:
-            color = "#d00"
-        return f"<span style='color:{color};'>{sign}{value:.2f}%</span>"
-
-    for r in rows:
-        if "error" in r:
-            html.append(f"<b>{r['name']}:</b><br>Error: {r['error']}<br><br>")
-            continue
-
-        html.append(f"<b>{r['name']}:</b><br>")
-        html.append(
-            f"Current: {r['current']} | ATH: {r['ath']} | From ATH: {html_color(r['from_ath'])}<br>"
-        )
-        html.append(
-            f"24h diff: {html_color(r['c1d'])} | 1 week: {html_color(r['c1w'])} | 1 month: {html_color(r['c1m'])}<br>"
-        )
-        html.append(
-            f"3 months: {html_color(r['c3m'])} | 6 months: {html_color(r['c6m'])} | 1 year: {html_color(r['c1y'])} | YTD: {html_color(r['cytd'])}<br><br>"
-        )
-
-    html.append("</div>")
-    return "\n".join(html)
 
 # ---------- Main ----------
 def main():
@@ -206,35 +168,48 @@ def main():
         except Exception as e:
             rows.append({"name": name, "error": str(e)})
 
-    # Console output
+    current_width = max(len(r["current"]) for r in rows if "error" not in r)
+    ath_width     = max(len(r["ath"]) for r in rows if "error" not in r)
+
     for r in rows:
         print(f"{r['name']}:")
         if "error" in r:
             print(f"  Error: {r['error']}\n")
             continue
 
-        sign = "+" if r["from_ath"] >= 0 else ""
-        if abs(r["from_ath"]) < 0.005:
+        val = r["from_ath"]
+        if abs(val) < 0.005:
             color = GRAY
-        elif r["from_ath"] < 0:
+        elif val < 0:
             color = RED
         else:
             color = GREEN
-        from_ath_colored = f"{color}{sign}{r['from_ath']:.2f}%{RESET}"
+        sign = "+" if val >= 0 else ""
+        from_ath_colored = f"{color}{sign}{val:.2f}%{RESET}"
 
-        print(f"  Current: {r['current']} | ATH: {r['ath']} | From ATH: {from_ath_colored}")
+        # Main header line
         print(
-            f"  24h diff: {colorize_change(r['c1d'])} |  1 week: {colorize_change(r['c1w'])} |  1 month: {colorize_change(r['c1m'])}"
+            f"  Current: {r['current']:<{current_width}} |  "
+            f"ATH: {r['ath']:<{ath_width}} |  "
+            f"From ATH: {from_ath_colored}"
         )
+
+        # Short-term changes
         print(
-            f"  3 months: {colorize_change(r['c3m'])} |  6 months: {colorize_change(r['c6m'])} |  1 year: {colorize_change(r['c1y'])} |  YTD: {colorize_change(r['cytd'])}\n"
+            f"  24h diff: {colorize_change(r['c1d'])}   |  "
+            f"1 week: {colorize_change(r['c1w'])}   |  "
+            f"1 month: {colorize_change(r['c1m'])}"
         )
 
-    # Generate HTML report for GitHub Actions email
-    html_report = generate_html_report(rows, now_lt)
-    Path("report.html").write_text(html_report, encoding="utf-8")
+        # Medium/long-term changes
+        print(
+            f"  3 months: {colorize_change(r['c3m'])}   |  "
+            f"6 months: {colorize_change(r['c6m'])}   |  "
+            f"1 year: {colorize_change(r['c1y'])}   |  "
+            f"YTD: {colorize_change(r['cytd'])}\n"
+        )
 
-    print("\nReport saved as report.html\n")
+    print("\n")
 
 if __name__ == "__main__":
     main()
