@@ -37,8 +37,8 @@ jobs:
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
-          server_port: 587
-          secure: false
+          server_port: 465          # ✅ Use SSL port instead of STARTTLS
+          secure: true              # ✅ Force SSL/TLS directly
           username: ${{ secrets.EMAIL_USER }}
           password: ${{ secrets.EMAIL_PASS }}
           subject: ${{ env.SUBJECT }}
