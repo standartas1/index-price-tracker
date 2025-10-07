@@ -5,7 +5,6 @@ import warnings
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
-from tabulate import tabulate
 
 # ---------- Configuration ----------
 TZ = ZoneInfo("Europe/Vilnius")
@@ -29,6 +28,7 @@ def save_cache(cache):
 
 # ---------- Data Retrieval ----------
 def get_cached_ath(ticker, cache):
+    """Return cached ATH if fresh (<7 days), else refresh from Yahoo Finance."""
     now = datetime.now(TZ)
     entry = cache.get(ticker)
     if entry:
@@ -46,13 +46,13 @@ def get_cached_ath(ticker, cache):
 
     if hist_all.empty and intraday_high is None:
         raise RuntimeError(f"Could not refresh ATH for {ticker}")
-
     ath = float(max(hist_all.max(), intraday_high or 0))
     cache[ticker] = {"ath": ath, "updated": now.isoformat()}
     save_cache(cache)
     return ath
 
 def get_current_price(ticker):
+    """Return current (latest 1-minute) price, fallback to last daily close."""
     t = yf.Ticker(ticker)
     for _ in range(2):
         intraday = t.history(period="1d", interval="1m")["Close"].dropna()
@@ -64,7 +64,17 @@ def get_current_price(ticker):
         raise RuntimeError(f"No price data for {ticker}")
     return float(daily.iloc[-1])
 
+def get_24h_change_live(ticker, current_price):
+    """Return 24h change using current live price vs. last daily close."""
+    t = yf.Ticker(ticker)
+    hist = t.history(period="2d", interval="1d")["Close"].dropna()
+    if len(hist) < 1:
+        return None
+    last_close = hist.iloc[-1]
+    return (current_price / last_close - 1.0) * 100.0
+
 def get_change_percent(ticker, days):
+    """Calculate percentage change over given number of trading or calendar days."""
     t = yf.Ticker(ticker)
     hist = t.history(period=f"{max(days+5, 10)}d", interval="1d")["Close"].dropna()
     if len(hist) < 2:
@@ -74,24 +84,26 @@ def get_change_percent(ticker, days):
     return (now_price / past_price - 1.0) * 100.0
 
 def get_ytd_change(ticker):
+    """Change since the first trading day of the current year."""
     t = yf.Ticker(ticker)
     start_of_year = datetime(datetime.now().year, 1, 1)
     hist = t.history(start=start_of_year, interval="1d")["Close"].dropna()
     if hist.empty:
         return None
-    return (hist.iloc[-1] / hist.iloc[0] - 1.0) * 100.0
+    first_price = hist.iloc[0]
+    last_price = hist.iloc[-1]
+    return (last_price / first_price - 1.0) * 100.0
 
 # ---------- Formatting ----------
 def fmt(value):
+    """Format % change with sign and two decimals."""
     if value is None:
         return "N/A"
-    return f"{value:+.2f}%"
+    sign = "+" if value >= 0 else ""
+    return f"{sign}{value:.2f}%"
 
 # ---------- Main ----------
 def main():
-    now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z")
-    print(f"\n{now} update\n")
-
     cache = load_cache()
     tickers = [
         ("NASDAQ-100", "^NDX"),
@@ -111,7 +123,7 @@ def main():
             pct_from_ath = (current / ath - 1.0) * 100.0
 
             # Performance changes
-            change_1d = get_change_percent(ticker, 1)
+            change_1d = get_24h_change_live(ticker, current)
             change_1w = get_change_percent(ticker, 7)
             change_1m = get_change_percent(ticker, 30)
             change_3m = get_change_percent(ticker, 90)
@@ -119,20 +131,18 @@ def main():
             change_1y = get_change_percent(ticker, 365)
             change_ytd = get_ytd_change(ticker)
 
-            table = [
-                ["Current", f"${current:,.2f}"],
-                ["ATH", f"${ath:,.2f}"],
-                ["From ATH", fmt(pct_from_ath)],
-                ["24h diff", fmt(change_1d)],
-                ["1 week", fmt(change_1w)],
-                ["1 month", fmt(change_1m)],
-                ["3 months", fmt(change_3m)],
-                ["6 months", fmt(change_6m)],
-                ["1 year", fmt(change_1y)],
-                ["YTD", fmt(change_ytd)],
-            ]
-
-            print(f"{name}:\n{tabulate(table, headers=['Metric', 'Value'], tablefmt='plain')}\n")
+            # Print formatted section
+            print(f"{name}:")
+            print(f"  Current: {current:,.2f}")
+            print(f"  ATH: {ath:,.2f}")
+            print(f"  From ATH: {fmt(pct_from_ath)}")
+            print(f"  24h diff: {fmt(change_1d)}")
+            print(f"  1 week: {fmt(change_1w)}")
+            print(f"  1 month: {fmt(change_1m)}")
+            print(f"  3 months: {fmt(change_3m)}")
+            print(f"  6 months: {fmt(change_6m)}")
+            print(f"  1 year: {fmt(change_1y)}")
+            print(f"  YTD: {fmt(change_ytd)}\n")
 
         except Exception as e:
             print(f"{name}: Error - {e}\n")
