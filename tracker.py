@@ -121,7 +121,7 @@ def generate_html_report(rows, now_lt):
     """Return an HTML formatted version of the report."""
     html = [
         f"<h2 style='font-family:sans-serif;'>Daily Index Update — {now_lt}</h2>",
-        "<div style='font-family:monospace; white-space:pre;'>"
+        "<div style='font-family:monospace; line-height:1.5;'>"
     ]
 
     def html_color(value):
