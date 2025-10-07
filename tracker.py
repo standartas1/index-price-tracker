@@ -11,9 +11,9 @@ TZ = ZoneInfo("Europe/Vilnius")
 CACHE_FILE = Path("ath_cache.json")
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# ANSI colors (for local console only)
-RED   = "\033[91m"
-GRAY  = "\033[90m"
+# ANSI colors for console output
+RED = "\033[91m"
+GRAY = "\033[90m"
 GREEN = "\033[92m"
 RESET = "\033[0m"
 
@@ -37,6 +37,7 @@ def get_cached_ath(ticker, cache):
     """Return cached ATH if fresh (<7 days), else refresh from Yahoo Finance."""
     now = datetime.now(TZ)
     entry = cache.get(ticker)
+
     if entry:
         try:
             last_update = datetime.fromisoformat(entry["updated"])
@@ -52,7 +53,6 @@ def get_cached_ath(ticker, cache):
 
     if hist_all.empty and intraday_high is None:
         raise RuntimeError(f"Could not refresh ATH for {ticker}")
-
     ath = float(max(hist_all.max() if not hist_all.empty else 0,
                     intraday_high if intraday_high else 0))
 
@@ -83,7 +83,7 @@ def get_24h_change_live(ticker, current_price):
     return (current_price / last_close - 1.0) * 100.0
 
 def get_change_percent(ticker, days):
-    """Calculate percentage change over given number of trading or calendar days."""
+    """Calculate percentage change over given number of days."""
     t = yf.Ticker(ticker)
     hist = t.history(period=f"{max(days+5, 10)}d", interval="1d")["Close"].dropna()
     if len(hist) < 2:
@@ -105,7 +105,7 @@ def get_ytd_change(ticker):
 
 # ---------- Formatting ----------
 def colorize_change(value):
-    """Return colored string for console output."""
+    """Return colored string for console % change."""
     if value is None:
         return "N/A"
     if abs(value) < 0.005:
@@ -117,43 +117,13 @@ def colorize_change(value):
     sign = "+" if value >= 0 else ""
     return f"{color}{sign}{value:.2f}%{RESET}"
 
-def generate_html_report(rows, now_lt):
-    """Return an HTML formatted version of the report."""
-    html = [
-        f"<h2 style='font-family:sans-serif;'>Daily Index Update — {now_lt}</h2>",
-        "<div style='font-family:monospace; line-height:1.5;'>"
-    ]
-
-    def html_color(value):
-        if value is None:
-            return "N/A"
-        sign = "+" if value >= 0 else ""
-        if abs(value) < 0.005:
-            color = "#888"
-        elif value > 0:
-            color = "#0b0"
-        else:
-            color = "#d00"
-        return f"<span style='color:{color};'>{sign}{value:.2f}%</span>"
-
-    for r in rows:
-        if "error" in r:
-            html.append(f"<b>{r['name']}:</b><br>Error: {r['error']}<br><br>")
-            continue
-
-        html.append(f"<b>{r['name']}:</b><br>")
-        html.append(
-            f"Current: {r['current']} | ATH: {r['ath']} | From ATH: {html_color(r['from_ath'])}<br>"
-        )
-        html.append(
-            f"24h diff: {html_color(r['c1d'])} | 1 week: {html_color(r['c1w'])} | 1 month: {html_color(r['c1m'])}<br>"
-        )
-        html.append(
-            f"3 months: {html_color(r['c3m'])} | 6 months: {html_color(r['c6m'])} | 1 year: {html_color(r['c1y'])} | YTD: {html_color(r['cytd'])}<br><br>"
-        )
-
-    html.append("</div>")
-    return "\n".join(html)
+def html_colorize(value):
+    """Return colored HTML span for % change."""
+    if value is None:
+        return "N/A"
+    color = "#888" if abs(value) < 0.005 else ("#0b0" if value > 0 else "#d00")
+    sign = "+" if value >= 0 else ""
+    return f"<span style='color:{color};'>{sign}{value:.2f}%</span>"
 
 # ---------- Main ----------
 def main():
@@ -168,6 +138,8 @@ def main():
     ]
 
     rows = []
+    html_output = f"<h2 style='font-family:sans-serif;'>Daily Index Update — {now_lt}</h2>\n"
+    html_output += "<div style='font-family:monospace; line-height:1.5;'>\n"
 
     for name, ticker in tickers:
         try:
@@ -190,10 +162,11 @@ def main():
             change_1y = get_change_percent(ticker, 365)
             change_ytd = get_ytd_change(ticker)
 
+            # Store everything
             rows.append({
                 "name": name,
-                "current": f"${current:,.2f}",
-                "ath": f"${ath:,.2f}",
+                "current": current,
+                "ath": ath,
                 "from_ath": pct_from_ath,
                 "c1d": change_1d,
                 "c1w": change_1w,
@@ -203,38 +176,65 @@ def main():
                 "c1y": change_1y,
                 "cytd": change_ytd
             })
+
         except Exception as e:
             rows.append({"name": name, "error": str(e)})
 
-    # Console output
+    current_width = max(len(f"${r['current']:,.2f}") for r in rows if "error" not in r)
+    ath_width = max(len(f"${r['ath']:,.2f}") for r in rows if "error" not in r)
+
     for r in rows:
         print(f"{r['name']}:")
         if "error" in r:
             print(f"  Error: {r['error']}\n")
+            html_output += f"<b>{r['name']}:</b><br>Error: {r['error']}<br><br>\n"
             continue
 
-        sign = "+" if r["from_ath"] >= 0 else ""
-        if abs(r["from_ath"]) < 0.005:
+        val = r["from_ath"]
+        if abs(val) < 0.005:
             color = GRAY
-        elif r["from_ath"] < 0:
+        elif val < 0:
             color = RED
         else:
             color = GREEN
-        from_ath_colored = f"{color}{sign}{r['from_ath']:.2f}%{RESET}"
+        sign = "+" if val >= 0 else ""
+        from_ath_colored = f"{color}{sign}{val:.2f}%{RESET}"
 
-        print(f"  Current: {r['current']} | ATH: {r['ath']} | From ATH: {from_ath_colored}")
+        # Console print
         print(
-            f"  24h diff: {colorize_change(r['c1d'])} |  1 week: {colorize_change(r['c1w'])} |  1 month: {colorize_change(r['c1m'])}"
+            f"  Current: ${r['current']:,.2f} |  "
+            f"ATH: ${r['ath']:,.2f} |  "
+            f"From ATH: {from_ath_colored}"
         )
         print(
-            f"  3 months: {colorize_change(r['c3m'])} |  6 months: {colorize_change(r['c6m'])} |  1 year: {colorize_change(r['c1y'])} |  YTD: {colorize_change(r['cytd'])}\n"
+            f"  24h diff: {colorize_change(r['c1d'])}   |  "
+            f"1 week: {colorize_change(r['c1w'])}   |  "
+            f"1 month: {colorize_change(r['c1m'])}"
+        )
+        print(
+            f"  3 months: {colorize_change(r['c3m'])}   |  "
+            f"6 months: {colorize_change(r['c6m'])}   |  "
+            f"1 year: {colorize_change(r['c1y'])}   |  "
+            f"YTD: {colorize_change(r['cytd'])}\n"
         )
 
-    # Generate HTML report for GitHub Actions email
-    html_report = generate_html_report(rows, now_lt)
-    Path("report.html").write_text(html_report, encoding="utf-8")
+        # HTML version
+        html_output += (
+            f"<b>{r['name']}:</b><br>"
+            f"Current: ${r['current']:,.2f} | ATH: ${r['ath']:,.2f} | From ATH: {html_colorize(val)}<br>"
+            f"24h diff: {html_colorize(r['c1d'])} | 1 week: {html_colorize(r['c1w'])} | 1 month: {html_colorize(r['c1m'])}<br>"
+            f"3 months: {html_colorize(r['c3m'])} | 6 months: {html_colorize(r['c6m'])} | "
+            f"1 year: {html_colorize(r['c1y'])} | YTD: {html_colorize(r['cytd'])}<br><br>\n"
+        )
 
-    print("\nReport saved as report.html\n")
+    html_output += "</div>\n"
+
+    # Write HTML report for GitHub email step
+    with open("report.html", "w", encoding="utf-8") as f:
+        f.write(html_output)
+
+    print("\nHTML report written to report.html\n")
+
 
 if __name__ == "__main__":
     main()

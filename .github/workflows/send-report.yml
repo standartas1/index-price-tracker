@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -24,7 +24,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install yfinance
 
-      - name: Run index tracker
+      - name: Run tracker
         run: |
           python tracker.py
 
@@ -33,10 +33,14 @@ jobs:
         run: |
           echo "SUBJECT=Daily Index Update — $(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
-      - name: Send email (Gmail via connection_url)
+      - name: Send email with HTML report
         uses: dawidd6/action-send-mail@v3
         with:
-          connection_url: "smtps://${{ secrets.EMAIL_USER }}:${{ secrets.EMAIL_PASS }}@smtp.gmail.com:465"
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASS }}
           subject: ${{ env.SUBJECT }}
           to: ${{ secrets.EMAIL_TO }}
           from: "Index Tracker <${{ secrets.EMAIL_USER }}>"
