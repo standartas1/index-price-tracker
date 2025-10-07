@@ -32,6 +32,11 @@ jobs:
           cat output.txt >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
+      - name: Prepare email subject
+        id: subject
+        run: |
+          echo "TODAY=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
       - name: Send email with report
         uses: dawidd6/action-send-mail@v3
         with:
@@ -39,7 +44,7 @@ jobs:
           server_port: 587
           username: ${{ secrets.EMAIL_USER }}
           password: ${{ secrets.EMAIL_PASS }}
-          subject: "Daily Index Update — $(date '+%Y-%m-%d')"
+          subject: "${{ env.TODAY }} index update"
           to: ${{ secrets.EMAIL_TO }}
           from: "Index Tracker"
           body: ${{ env.OUTPUT }}

@@ -31,7 +31,6 @@ def get_cached_ath(ticker, cache):
     """Return cached ATH if fresh (<7 days), else refresh from Yahoo Finance."""
     now = datetime.now(TZ)
     entry = cache.get(ticker)
-
     if entry:
         try:
             last_update = datetime.fromisoformat(entry["updated"])
@@ -47,10 +46,7 @@ def get_cached_ath(ticker, cache):
 
     if hist_all.empty and intraday_high is None:
         raise RuntimeError(f"Could not refresh ATH for {ticker}")
-
-    ath = float(max(hist_all.max() if not hist_all.empty else 0,
-                    intraday_high if intraday_high else 0))
-
+    ath = float(max(hist_all.max(), intraday_high or 0))
     cache[ticker] = {"ath": ath, "updated": now.isoformat()}
     save_cache(cache)
     return ath
@@ -100,7 +96,7 @@ def get_ytd_change(ticker):
 
 # ---------- Formatting ----------
 def fmt(value):
-    """Format a percentage value without colors."""
+    """Format % change with sign and two decimals."""
     if value is None:
         return "N/A"
     sign = "+" if value >= 0 else ""
@@ -117,8 +113,6 @@ def main():
         ("S&P 500", "^GSPC"),
         ("Bitcoin", "BTC-USD")
     ]
-
-    rows = []
 
     for name, ticker in tickers:
         try:
@@ -141,53 +135,17 @@ def main():
             change_1y = get_change_percent(ticker, 365)
             change_ytd = get_ytd_change(ticker)
 
-            rows.append({
-                "name": name,
-                "current": f"${current:,.2f}",
-                "ath": f"${ath:,.2f}",
-                "from_ath": pct_from_ath,
-                "c1d": change_1d,
-                "c1w": change_1w,
-                "c1m": change_1m,
-                "c3m": change_3m,
-                "c6m": change_6m,
-                "c1y": change_1y,
-                "cytd": change_ytd
-            })
+            # Print formatted section
+            print(f"{name}:")
+            print(f"  Current: {current:,.2f}")
+            print(f"  ATH: {ath:,.2f}       |  From ATH: {fmt(pct_from_ath)}")
+            print(f"  24h diff: {fmt(change_1d)}       |  1 week: {fmt(change_1w)}")
+            print(f"  1 month: {fmt(change_1m)}      |  3 months: {fmt(change_3m)}")
+            print(f"  6 months: {fmt(change_6m)}  |  1 year: {fmt(change_1y)}")
+            print(f"  YTD: {fmt(change_ytd)}\n")
+
         except Exception as e:
-            rows.append({"name": name, "error": str(e)})
-
-    current_width = max(len(r["current"]) for r in rows if "error" not in r)
-    ath_width     = max(len(r["ath"]) for r in rows if "error" not in r)
-
-    for r in rows:
-        print(f"{r['name']}:")
-        if "error" in r:
-            print(f"  Error: {r['error']}\n")
-            continue
-
-        val = fmt(r["from_ath"])
-
-        print(
-            f"  Current: {r['current']:<{current_width}} |  "
-            f"ATH: {r['ath']:<{ath_width}} |  "
-            f"From ATH: {val}"
-        )
-
-        print(
-            f"  24h diff: {fmt(r['c1d'])}   |  "
-            f"1 week: {fmt(r['c1w'])}   |  "
-            f"1 month: {fmt(r['c1m'])}"
-        )
-
-        print(
-            f"  3 months: {fmt(r['c3m'])}   |  "
-            f"6 months: {fmt(r['c6m'])}   |  "
-            f"1 year: {fmt(r['c1y'])}   |  "
-            f"YTD: {fmt(r['cytd'])}\n"
-        )
-
-    print()
+            print(f"{name}: Error - {e}\n")
 
 if __name__ == "__main__":
     main()
