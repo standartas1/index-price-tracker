@@ -33,14 +33,10 @@ jobs:
         run: |
           echo "SUBJECT=Daily Index Update — $(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
-      - name: Send HTML email
+      - name: Send email (Gmail via connection_url)
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          secure: false
-          username: ${{ secrets.EMAIL_USER }}
-          password: ${{ secrets.EMAIL_PASS }}
+          connection_url: "smtps://${{ secrets.EMAIL_USER }}:${{ secrets.EMAIL_PASS }}@smtp.gmail.com:465"
           subject: ${{ env.SUBJECT }}
           to: ${{ secrets.EMAIL_TO }}
           from: "Index Tracker <${{ secrets.EMAIL_USER }}>"
