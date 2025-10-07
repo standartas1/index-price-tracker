@@ -116,7 +116,6 @@ def main():
             ath = get_cached_ath(ticker, cache)
             current = get_current_price(ticker)
             if current > ath:
-                print(f"(New intraday ATH detected for {name} — updating cache.)")
                 ath = current
                 cache[ticker] = {"ath": ath, "updated": datetime.now(TZ).isoformat()}
                 save_cache(cache)
@@ -133,15 +132,17 @@ def main():
             change_ytd = get_ytd_change(ticker)
 
             # Print formatted section
-            left_width = 10
-
             print(f"{name}:")
-            print(f"  {'Current:':<{left_width}} {current:>{left_width},.2f}")
-            print(f"  {'ATH:':<{left_width}} {ath:>{left_width},.2f} |  From ATH: {fmt(pct_from_ath)}")
-            print(f"  {'24h diff:':<{left_width}} {fmt(change_1d):>{left_width}} |  1 week: {fmt(change_1w)}")
-            print(f"  {'1 month:':<{left_width}} {fmt(change_1m):>{left_width}} |  3 months: {fmt(change_3m)}")
-            print(f"  {'6 months:':<{left_width}} {fmt(change_6m):>{left_width}} |  1 year: {fmt(change_1y)}")
-            print(f"  {'YTD:':<{left_width}} {fmt(change_ytd):>{left_width}}\n")
+            print(f"  Current:   {current:,.2f}")
+            print(f"  ATH:       {ath:,.2f}")
+            print(f"  From ATH: {fmt(pct_from_ath)}")
+            print(f"  24h diff: {fmt(change_1d)}")
+            print(f"  1 week:   {fmt(change_1w)}")
+            print(f"  1 month:  {fmt(change_1m)}")
+            print(f"  3 months: {fmt(change_3m)}")
+            print(f"  6 months: {fmt(change_6m)}")
+            print(f"  1 year:   {fmt(change_1y)}")
+            print(f"  YTD:      {fmt(change_ytd)}\n")
 
         except Exception as e:
             print(f"{name}: Error - {e}\n")
