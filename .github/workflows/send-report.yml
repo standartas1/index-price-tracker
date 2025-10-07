@@ -56,11 +56,10 @@ jobs:
         with:
           server_address: smtp.gmail.com
           server_port: 587
+          secure: false
           username: ${{ secrets.EMAIL_USER }}
           password: ${{ secrets.EMAIL_PASS }}
           subject: ${{ env.SUBJECT }}
           to: ${{ secrets.EMAIL_TO }}
           from: "Index Tracker"
-          secure: true
-          content_type: text/html
           html_body: file://report.html
